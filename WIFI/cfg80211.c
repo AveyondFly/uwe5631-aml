@@ -395,7 +395,7 @@ int sprdwl_init_fw(struct sprdwl_vif *vif)
 	struct sprdwl_priv *priv = vif->priv;
 	enum nl80211_iftype type = vif->wdev.iftype;
 	enum sprdwl_mode mode;
-	u8 *mac;
+	const u8 *mac;
 	u8 vif_ctx_id = 0;
 
 	wl_ndev_log(L_DBG, vif->ndev, "%s type %d, mode %d\n", __func__, type,
@@ -3133,7 +3133,14 @@ static void sprdwl_cfg80211_stop_p2p_device(struct wiphy *wiphy,
 		sprdwl_scan_done(vif, true);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static int sprdwl_cfg80211_tdls_mgmt(struct wiphy *wiphy,
+				     struct net_device *ndev, const u8 *peer,
+				     int link_id, u8 action_code,
+				     u8 dialog_token, u16 status_code,
+				     u32 peer_capability, bool initiator,
+				     const u8 *buf, size_t len)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0)
 static int sprdwl_cfg80211_tdls_mgmt(struct wiphy *wiphy,
 				     struct net_device *ndev, const u8 *peer,
 				     u8 action_code, u8 dialog_token,

@@ -135,7 +135,9 @@ int sdiohal_tx_thread(void *data)
 {
 	struct sdiohal_data_t *p_data = sdiohal_get_data();
 	struct sdiohal_list_t data_list;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 	struct sched_param param;
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	struct timespec64 tm_begin, tm_end;
 #else
@@ -144,8 +146,12 @@ int sdiohal_tx_thread(void *data)
 	static long time_total_ns;
 	static int times_count;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
+	sched_set_fifo(current);
+#else
 	param.sched_priority = SDIO_TX_TASK_PRIO;
 	sched_setscheduler(current, SCHED_FIFO, &param);
+#endif
 
 	while (1) {
 		/* Wait the semaphore */

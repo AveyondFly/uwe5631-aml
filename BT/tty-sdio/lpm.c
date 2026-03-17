@@ -10,6 +10,9 @@
 #include <linux/gpio.h>
 #include <linux/seq_file.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+#define PDE_DATA(inode) pde_data(inode)
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 #include "include/wakelock.h"
 #else

@@ -1355,14 +1355,20 @@ static int sprdwl_tx_work_queue(void *data)
 	enum sprdwl_mode mode = SPRDWL_MODE_NONE;
 	int send_num = 0;
 	struct sprdwl_priv *priv;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 	struct sched_param param;
+#endif
 
 	tx_msg = (struct sprdwl_tx_msg *)data;
 	intf = tx_msg->intf;
 	priv = intf->priv;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
+	sched_set_fifo(current);
+#else
 	param.sched_priority = 1;
 	sched_setscheduler(current, SCHED_FIFO, &param);
+#endif
 
 	while (1) {
 		tx_down(tx_msg);

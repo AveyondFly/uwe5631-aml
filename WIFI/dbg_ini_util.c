@@ -21,7 +21,9 @@ static int dbg_load_ini_resource(char *path[], char *buf, int size)
 {
 	int ret;
 	int index = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
 	mm_segment_t oldfs;
+#endif
 	struct file *filp = (struct file *)-ENOENT;
 
 	for (index = 0; index < MAX_PATH_NUM; index++) {

@@ -194,8 +194,13 @@ static int sdio_data_transmit(uint8_t* data, size_t count)
     return bt_data_interface->write(data, count);
 }
 
-static int mtty_write_plus(struct tty_struct* tty,
-    const unsigned char* buf, int count)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+static ssize_t mtty_write_plus(struct tty_struct *tty,
+    const u8 *buf, size_t count)
+#else
+static int mtty_write_plus(struct tty_struct *tty,
+    const unsigned char *buf, int count)
+#endif
 {
 
     return sitm_write(buf, count, sdio_data_transmit);

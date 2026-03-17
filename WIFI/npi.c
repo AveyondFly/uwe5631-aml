@@ -33,7 +33,9 @@ static struct genl_family sprdwl_nl_genl_family;
 static int sprdwl_get_flag(void)
 {
 	struct file *fp = NULL;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
 	mm_segment_t fs;
+#endif
 	loff_t *pos;
 	int flag = 0;
 	char file_data[2];
@@ -110,7 +112,10 @@ static int sprdwl_cmd_set_psm_cap(struct sprdwl_vif *vif)
 	return ret;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static int sprdwl_npi_pre_doit(const struct genl_split_ops *ops,
+			       struct sk_buff *skb, struct genl_info *info)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0)
 static int sprdwl_npi_pre_doit(const struct genl_ops *ops,
 			       struct sk_buff *skb, struct genl_info *info)
 #else
@@ -146,7 +151,10 @@ static int sprdwl_npi_pre_doit(struct genl_ops *ops,
 	return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void sprdwl_npi_post_doit(const struct genl_split_ops *ops,
+				 struct sk_buff *skb, struct genl_info *info)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0)
 static void sprdwl_npi_post_doit(const struct genl_ops *ops,
 				 struct sk_buff *skb, struct genl_info *info)
 #else

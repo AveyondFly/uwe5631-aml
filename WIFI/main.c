@@ -1010,12 +1010,20 @@ static int sprdwl_set_mac(struct net_device *dev, void *addr)
 		if (!is_zero_ether_addr(sa->sa_data)) {
 			vif->has_rand_mac = true;
 			memcpy(vif->random_mac, sa->sa_data, ETH_ALEN);
+	#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+			dev_addr_set(dev, sa->sa_data);
+#else
 			memcpy(dev->dev_addr, sa->sa_data, ETH_ALEN);
+#endif
 		} else {
 			vif->has_rand_mac = false;
 			netdev_info(dev, "need clear random mac for sta/softap mode\n");
 			memset(vif->random_mac, 0, ETH_ALEN);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+			dev_addr_set(dev, vif->mac);
+#else
 			memcpy(dev->dev_addr, vif->mac, ETH_ALEN);
+#endif
 		}
 	}
 	/*return success to pass vts test*/
@@ -1132,7 +1140,9 @@ static struct notifier_block sprdwl_inet6addr_cb = {
 static int write_mac_addr(char *mac_file, u8 *addr)
 {
 	struct file *fp = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
 	mm_segment_t old_fs;
+#endif
 	char buf[18];
 	loff_t pos = 0;
 	/*open file*/
@@ -1178,7 +1188,9 @@ static int sprdwl_get_mac_from_file(struct sprdwl_vif *vif, u8 *addr)
 {
 	struct file *fp = 0;
 	u8 buf[64] = { 0 };
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
 	mm_segment_t fs;
+#endif
 	loff_t *pos;
 	char tmp_mac_file[256] = {0};
 
@@ -1232,7 +1244,7 @@ static int sprdwl_get_mac_from_file(struct sprdwl_vif *vif, u8 *addr)
 
 	return 0;
 random_mac:
-	random_ether_addr(addr);
+	eth_random_addr(addr);
 	wl_warn("%s use random MAC address\n",
 			__func__);
 	/* initialize MAC addr with specific OUI */
@@ -1286,6 +1298,7 @@ static void sprdwl_set_mac_addr(struct sprdwl_vif *vif, u8 *pending_addr,
 	case NL80211_IFTYPE_P2P_CLIENT:
 	case NL80211_IFTYPE_P2P_GO:
 		addr[4] ^= 0x80;
+		fallthrough;
 	case NL80211_IFTYPE_P2P_DEVICE:
 		addr[0] ^= 0x02;
 		break;
@@ -1616,7 +1629,16 @@ static struct sprdwl_vif *sprdwl_register_netdev(struct sprdwl_priv *priv,
 	ndev->features |= NETIF_F_SG;
 	SET_NETDEV_DEV(ndev, wiphy_dev(priv->wiphy));
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+	{
+		u8 tmp_addr[ETH_ALEN];
+		ether_addr_copy(tmp_addr, ndev->dev_addr);
+		sprdwl_set_mac_addr(vif, addr, tmp_addr);
+		dev_addr_set(ndev, tmp_addr);
+	}
+#else
 	sprdwl_set_mac_addr(vif, addr, ndev->dev_addr);
+#endif
 
 #ifdef CONFIG_P2P_INTF
 	if (type == NL80211_IFTYPE_P2P_DEVICE)

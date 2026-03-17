@@ -187,7 +187,7 @@ int rx_data_recv(const unsigned char* buf, int count,
                      }    
                      else  red_bt_flag = 0x11; //red  //cancel pair upload
                 }
-
+                fallthrough;
             default:
                 upper_cb(rxmsg, pack_length);
                 break;

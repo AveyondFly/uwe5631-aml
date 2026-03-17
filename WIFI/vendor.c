@@ -879,8 +879,8 @@ static int sprdwl_vendor_set_country(struct wiphy *wiphy,
 	char country_code[2] = {0};
 	const struct nlattr *iter;
 
-    if ((data == NULL) || (len == 0))
-        return -EINVAL;
+	if ((data == NULL) || (len == 0))
+		return -EINVAL;
 
 	nla_for_each_attr(iter, data, len, rem) {
 		type = nla_type(iter);

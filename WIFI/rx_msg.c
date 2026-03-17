@@ -246,7 +246,9 @@ static void sprdwl_rx_work_queue(struct work_struct *work)
 	/*struct sprdwl_vif *vif;
 	struct sprdwl_cmd_hdr *hdr;*/
 #ifdef SPRD_RX_THREAD
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 	struct sched_param param;
+#endif
 	rx_if = (struct sprdwl_rx_if *)arg;
 #else
 	rx_if = container_of(work, struct sprdwl_rx_if, rx_work);
@@ -255,8 +257,12 @@ static void sprdwl_rx_work_queue(struct work_struct *work)
 	priv = intf->priv;
 
 #ifdef SPRD_RX_THREAD
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
+	sched_set_fifo(current);
+#else
 	param.sched_priority = 1;
 	sched_setscheduler(current, SCHED_FIFO, &param);
+#endif
 	while(1) {
 		rx_down(rx_if);
 		if(intf->exit)
@@ -468,7 +474,11 @@ void sprdwl_rx_napi_init(struct net_device *ndev, struct sprdwl_intf *intf)
 {
 	struct sprdwl_rx_if *rx_if = (struct sprdwl_rx_if *)intf->sprdwl_rx;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	netif_napi_add(ndev, &rx_if->napi_rx, sprdwl_netdev_poll_rx);
+#else
 	netif_napi_add(ndev, &rx_if->napi_rx, sprdwl_netdev_poll_rx, 128);
+#endif
 	napi_enable(&rx_if->napi_rx);
 	rx_if->napi_rx_enable = true;
 }
