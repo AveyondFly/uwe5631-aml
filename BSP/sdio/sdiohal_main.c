@@ -23,6 +23,7 @@
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
+#include <linux/of_platform.h>
 #include <linux/pm_runtime.h>
 #include <linux/mmc/card.h>
 #include <linux/mmc/core.h>
@@ -53,7 +54,7 @@ extern void sdio_set_max_regs(unsigned int size);
 #endif
 
 #ifdef CONFIG_RK_BOARD
-extern int rockchip_wifi_set_carddetect(int val);
+int __weak rockchip_wifi_set_carddetect(int val) { return 0; }
 #endif
 
 #ifdef CONFIG_AW_BOARD

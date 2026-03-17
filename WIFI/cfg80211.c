@@ -1033,10 +1033,18 @@ err_start:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+static int sprdwl_cfg80211_change_beacon(struct wiphy *wiphy,
+					 struct net_device *ndev,
+					 struct cfg80211_ap_update *info)
+{
+	struct cfg80211_beacon_data *beacon = &info->beacon;
+#else
 static int sprdwl_cfg80211_change_beacon(struct wiphy *wiphy,
 					 struct net_device *ndev,
 					 struct cfg80211_beacon_data *beacon)
 {
+#endif
 	struct sprdwl_vif *vif = netdev_priv(ndev);
 
 	wl_ndev_log(L_DBG, ndev, "%s\n", __func__);

@@ -27,6 +27,7 @@
 #include <linux/vmalloc.h>
 #include <linux/vt_kern.h>
 #ifdef CONFIG_OF
+#include <linux/of.h>
 #include <linux/of_device.h>
 #endif
 #include <linux/compat.h>
@@ -65,7 +66,11 @@ USER_SYSCALL_2(chmod, const char __user *, filename, mode_t, mode);
 #endif
 
 static void __exit uwe5621_bt_tty_exit(void);
-static int mtty_remove(struct platform_device* pdev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void mtty_remove(struct platform_device *pdev);
+#else
+static int mtty_remove(struct platform_device *pdev);
+#endif
 int closeflag = 0;
 struct mtty_device* mtty_dev;
 
@@ -717,21 +722,25 @@ static int mtty_probe(struct platform_device* pdev)
     return 0;
 }
 
-static int mtty_remove(struct platform_device* pdev)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void mtty_remove(struct platform_device *pdev)
+#else
+static int mtty_remove(struct platform_device *pdev)
+#endif
 {
-    struct mtty_device* mtty = platform_get_drvdata(pdev);
+    struct mtty_device *mtty = platform_get_drvdata(pdev);
     rfkill_bluetooth_remove(pdev);
     pr_err("%s\n", __func__);
     mtty_tty_driver_exit(mtty);
     bt_data_interface->cleanup();
     kfree(mtty->port);
     mtty_destroy_pdata(&mtty->pdata);
-    /* tasklet_kill(&mtty->rx_task); */
     kfree(mtty);
     platform_set_drvdata(pdev, NULL);
-    // bluesleep_exit();
     hci_destory();
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
     return 0;
+#endif
 }
 
 static int mtty_suspend(struct platform_device* device, pm_message_t state)

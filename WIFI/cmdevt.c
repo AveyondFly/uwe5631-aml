@@ -3430,8 +3430,10 @@ void sprdwl_event_chan_changed(struct sprdwl_vif *vif, u8 *data, u16 len)
 						NL80211_CHAN_HT20);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
 			cfg80211_ch_switch_notify(vif->ndev, &chandef);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 			cfg80211_ch_switch_notify(vif->ndev, &chandef, 0, 0);
+#else
+			cfg80211_ch_switch_notify(vif->ndev, &chandef, 0);
 #endif
 		} else
 			wl_err("%s, ch is null!\n", __func__);
