@@ -23,6 +23,7 @@
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/pm_runtime.h>
 #include <linux/mmc/card.h>
@@ -44,17 +45,71 @@ extern int mmc_sdio_set_detect(int sdio_det);
 #endif
 
 #ifdef CONFIG_AML_BOARD
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
 #include <linux/amlogic/aml_gpio_consumer.h>
-
-extern int wifi_irq_num(void);
-extern int wifi_irq_trigger_level(void);
 extern void sdio_reinit(void);
 extern void sdio_clk_always_on(int on);
 extern void sdio_set_max_regs(unsigned int size);
+#else
+/* GPIO_IRQ_LOW is Amlogic BSP specific, use IRQF_TRIGGER_LOW for mainline */
+#ifndef GPIO_IRQ_LOW
+#define GPIO_IRQ_LOW IRQF_TRIGGER_LOW
+#endif
+/* Mainline kernel >= 5.4: use alternatives for Amlogic BSP functions */
+static inline void sdio_reinit(void) { }
+
+/*
+ * sdio_clk_always_on: use pm_runtime to keep SDIO clock active
+ * In mainline kernel, mmc subsystem manages clock via runtime PM
+ */
+static inline void sdio_clk_always_on(int on)
+{
+	struct sdiohal_data_t *p_data = sdiohal_get_data();
+
+	if (!p_data || !p_data->sdio_func[FUNC_1])
+		return;
+
+	if (on)
+		pm_runtime_get_sync(&p_data->sdio_func[FUNC_1]->dev);
+	else
+		pm_runtime_put(&p_data->sdio_func[FUNC_1]->dev);
+}
+
+/* sdio_set_max_regs: directly set mmc_host max_req_size */
+static inline void sdio_set_max_regs(unsigned int size)
+{
+	struct sdiohal_data_t *p_data = sdiohal_get_data();
+
+	if (p_data && p_data->sdio_dev_host) {
+		p_data->sdio_dev_host->max_req_size = size;
+		pr_info("sdiohal: set max_req_size to 0x%x\n", size);
+	}
+}
+#endif
+/* These are provided by platform/wifi_dt.c for both old and new kernels */
+extern int wifi_irq_num(void);
+extern int wifi_irq_trigger_level(void);
 #endif
 
 #ifdef CONFIG_RK_BOARD
-int __weak rockchip_wifi_set_carddetect(int val) { return 0; }
+int __weak rockchip_wifi_set_carddetect(int val)
+{
+	struct sdiohal_data_t *p_data = sdiohal_get_data();
+
+	if (p_data && p_data->sdio_dev_host)
+		mmc_detect_change(p_data->sdio_dev_host, 0);
+	return 0;
+}
+#endif
+
+#if 1//def CONFIG_MAINLINE_BOARD
+static void mainline_mmc_rescan(void)
+{
+	struct sdiohal_data_t *p_data = sdiohal_get_data();
+
+	if (p_data && p_data->sdio_dev_host)
+		mmc_detect_change(p_data->sdio_dev_host, 0);
+}
 #endif
 
 #ifdef CONFIG_AW_BOARD
@@ -78,10 +133,9 @@ extern int sunxi_wlan_get_oob_irq_flags(void);
 #define IS_BYPASS_WAKE(addr) (false)
 #endif
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 18, 20)
-extern void mmc_power_up(struct mmc_host *host, u32 ocr);
-extern void mmc_power_off(struct mmc_host *host);
-#endif
+/* mmc_power_up/mmc_power_off/mmc_power_save_host/mmc_power_restore_host
+ * are no longer exported in kernel 5.4+, use mmc_sw_reset instead
+ */
 
 static int (*scan_card_notify)(void);
 struct sdiohal_data_t *sdiohal_data;
@@ -1330,6 +1384,24 @@ static int sdiohal_host_irq_init(unsigned int irq_gpio_num)
 		     __func__, p_data->irq_num,
 		     ((p_data->irq_trigger_type == IRQF_TRIGGER_LOW) ?
 		     "low" : "high"));
+#elif defined(CONFIG_MAINLINE_BOARD)
+	{
+		struct device_node *np = of_find_compatible_node(NULL, NULL,
+							"unisoc,uwe_bsp");
+		if (np) {
+			p_data->irq_num = irq_of_parse_and_map(np, 0);
+			of_node_put(np);
+		}
+		if (p_data->irq_num <= 0) {
+			sdiohal_err("irq_of_parse_and_map failed: %d\n",
+				    p_data->irq_num);
+			p_data->irq_num = 0;
+			return -EINVAL;
+		}
+		p_data->irq_trigger_type = IRQF_TRIGGER_LOW;
+		sdiohal_info("mainline gpio irq num:%d trigger:low\n",
+			     p_data->irq_num);
+	}
 #else
 	if (irq_gpio_num == 0)
 		return ret;
@@ -1498,7 +1570,8 @@ static int sdiohal_parse_dt(void)
 	if (sdio_node == NULL)
 		sdiohal_info("not config sdio host node.");
 
-#if (defined(CONFIG_RK_BOARD) || defined(CONFIG_AW_BOARD))
+#if (defined(CONFIG_RK_BOARD) || defined(CONFIG_AW_BOARD) || \
+     defined(CONFIG_MAINLINE_BOARD))
 	/* will get host at sdiohal_probe */
 	return 0;
 #endif
@@ -1752,15 +1825,17 @@ static int sdiohal_resume(struct device *dev)
 	 * For hisi board, sdio host will power down.
 	 * So sdio slave need to reset and reinit.
 	 */
-#if KERNEL_VERSION(4, 18, 20) >= LINUX_VERSION_CODE
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+	/* mmc_power functions not exported in 5.4+, use sw_reset */
+	if (p_data->sdio_dev_host->card)
+		mmc_sw_reset(p_data->sdio_dev_host->card);
+#elif LINUX_VERSION_CODE > KERNEL_VERSION(4, 18, 20)
 	mmc_power_save_host(p_data->sdio_dev_host);
-#else
-	mmc_power_off(p_data->sdio_dev_host);
-#endif
 	mdelay(5);
-#if KERNEL_VERSION(4, 18, 20) >= LINUX_VERSION_CODE
 	mmc_power_restore_host(p_data->sdio_dev_host);
 #else
+	mmc_power_off(p_data->sdio_dev_host);
+	mdelay(5);
 	mmc_power_up(p_data->sdio_dev_host, p_data->sdio_dev_host->card->ocr);
 #endif
 
@@ -2176,11 +2251,7 @@ static int sdiohal_probe(struct sdio_func *func,
 
 	/* the card is nonremovable */
 	p_data->sdio_dev_host->caps |= MMC_CAP_NONREMOVABLE;
-#ifdef CONFIG_RK_BOARD
-	/* Some RK platform, if config caps with MMC_CAP_SDIO_IRQ, will set
-	 * caps2 with MMC_CAP2_SDIO_IRQ_NOTHREAD at the same time.
-	 * This is unexpected. So clear this status.
-	 */
+#if defined(CONFIG_RK_BOARD)
 	if (p_data->irq_type == SDIOHAL_RX_INBAND_IRQ)
 		p_data->sdio_dev_host->caps2 &= ~MMC_CAP2_SDIO_IRQ_NOTHREAD;
 #endif
@@ -2322,6 +2393,10 @@ void sdiohal_remove_card(void)
 	rockchip_wifi_set_carddetect(0);
 #endif
 
+#ifdef CONFIG_MAINLINE_BOARD
+	mainline_mmc_rescan();
+#endif
+
 #ifdef CONFIG_AW_BOARD
 	sunxi_mmc_rescan_card(wlan_bus_index);
 #endif
@@ -2361,7 +2436,8 @@ int sdiohal_scan_card(void)
 	 * Then power down. In order to not rescan sdio card,
 	 * reset and reinit sdio host and slave is needed.
 	 */
-	sdio_reinit();
+//	sdio_reinit();
+	mainline_mmc_rescan();
 #endif
 
 	if (WCN_CARD_EXIST(&p_data->xmit_cnt)) {
@@ -2372,12 +2448,17 @@ int sdiohal_scan_card(void)
 		 * But will reset sdio host, sdio slave need to be reset.
 		 * If reset pin NC, don't need to reset sdio slave.
 		 */
-		if (p_data->sdio_dev_host != NULL)
-#if KERNEL_VERSION(4, 18, 20) >= LINUX_VERSION_CODE
+		if (p_data->sdio_dev_host != NULL) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+			/* mmc_power functions not exported in 5.4+ */
+			if (p_data->sdio_dev_host->card)
+				mmc_sw_reset(p_data->sdio_dev_host->card);
+#elif LINUX_VERSION_CODE > KERNEL_VERSION(4, 18, 20)
 			mmc_power_restore_host(p_data->sdio_dev_host);
 #else
 			mmc_power_up(p_data->sdio_dev_host, p_data->sdio_dev_host->card->ocr);
 #endif
+		}
 		/*
 		 * setting sdio max request size to 512kB
 		 * to improve transmission efficiency.
@@ -2419,6 +2500,10 @@ int sdiohal_scan_card(void)
 
 #ifdef CONFIG_RK_BOARD
 	rockchip_wifi_set_carddetect(1);
+#endif
+
+#ifdef CONFIG_MAINLINE_BOARD
+	mainline_mmc_rescan();
 #endif
 
 #ifdef CONFIG_AW_BOARD

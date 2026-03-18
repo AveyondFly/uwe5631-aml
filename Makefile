@@ -1,13 +1,25 @@
+# Cross compile settings for ROCKNIX
+TOOLCHAIN_PATH ?= /home/ubuntu/distribution/build.ROCKNIX-RK3326.aarch64/toolchain/bin
+KERNEL_SRC ?= /home/ubuntu/distribution/build.ROCKNIX-S905L3A.aarch64/build/linux-6.18.13
+ARCH ?= arm64
+CROSS_COMPILE ?= $(TOOLCHAIN_PATH)/aarch64-rocknix-linux-gnueabi-
+
+PWD := $(shell pwd)
+
 all: modules
 
 modules:
-	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_SRC) M=$(M)/BSP CFG_AML_WIFI_DEVICE_UWE5621=y UNISOC_64_BIT_RX_RECVBUF_LEN_CONFIG=32 modules
-	$(CROSS_COMPILE)strip --strip-unneeded ${OUT_DIR}/$(M)/BSP/uwe5621_bsp_sdio.ko
-	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_SRC) M=$(M)/WIFI TARGET_BUILD_VARIANT=user modules
-	$(CROSS_COMPILE)strip --strip-unneeded ${OUT_DIR}/$(M)/WIFI/sprdwl_ng.ko
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_SRC) M=$(PWD)/BSP CFG_AML_WIFI_DEVICE_UWE5621=y modules
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_SRC) M=$(PWD)/WIFI TARGET_BUILD_VARIANT=user modules
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_SRC) M=$(PWD)/BT/tty-sdio CURFOLDER=$(PWD)/BSP modules
+
+clean:
+	$(MAKE) -C $(KERNEL_SRC) M=$(PWD)/BSP clean
+	$(MAKE) -C $(KERNEL_SRC) M=$(PWD)/WIFI clean
+	$(MAKE) -C $(KERNEL_SRC) M=$(PWD)/BT/tty-sdio clean
 
 modules_install:
-	$(MAKE) INSTALL_MOD_STRIP=1 M=$(M)/BSP -C $(KERNEL_SRC) modules_install
-	mkdir -p ${OUT_DIR}/../vendor_lib/modules
-	cd ${OUT_DIR}/$(M); find -name "*.ko" -exec cp {} ${OUT_DIR}/../vendor_lib/modules/ \;
+	$(MAKE) INSTALL_MOD_STRIP=1 M=$(PWD)/BSP -C $(KERNEL_SRC) modules_install
+	$(MAKE) INSTALL_MOD_STRIP=1 M=$(PWD)/WIFI -C $(KERNEL_SRC) modules_install
+	$(MAKE) INSTALL_MOD_STRIP=1 M=$(PWD)/BT/tty-sdio -C $(KERNEL_SRC) modules_install
 

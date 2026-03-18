@@ -2187,7 +2187,12 @@ err:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+static int sprdwl_cfg80211_set_wiphy_params(struct wiphy *wiphy,
+					    int radio_idx, u32 changed)
+#else
 static int sprdwl_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed)
+#endif
 {
 	struct sprdwl_priv *priv = wiphy_priv(wiphy);
 	u32 rts = 0, frag = 0;

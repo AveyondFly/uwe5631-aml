@@ -449,7 +449,7 @@ void sdiohal_callback_lock(struct mutex *mutex);
 void sdiohal_callback_unlock(struct mutex *mutex);
 
 /* for sleep */
-#if 0
+#if 1
 void sdiohal_cp_tx_sleep(enum slp_subsys subsys);
 void sdiohal_cp_tx_wakeup(enum slp_subsys subsys);
 void sdiohal_cp_rx_sleep(enum slp_subsys subsys);

@@ -36,6 +36,12 @@
 #include <linux/udp.h>
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+#define del_timer		timer_delete
+#define del_timer_sync		timer_delete_sync
+#define from_timer(var, cb, member) timer_container_of(var, cb, member)
+#endif
+
 #include "cfg80211.h"
 #include "cmdevt.h"
 #include "intf.h"

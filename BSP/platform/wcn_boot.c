@@ -56,8 +56,15 @@
 #endif
 
 #ifdef CONFIG_AML_BOARD
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
 #include <linux/amlogic/aml_gpio_consumer.h>
-
+#else
+/* GPIO_IRQ_LOW is Amlogic BSP specific, use IRQF_TRIGGER_LOW for mainline */
+#ifndef GPIO_IRQ_LOW
+#define GPIO_IRQ_LOW IRQF_TRIGGER_LOW
+#endif
+#endif
+/* These are provided by platform/wifi_dt.c */
 extern int wifi_irq_trigger_level(void);
 #ifdef CONFIG_WCN_RESET_PIN_CONNECTED
 extern void extern_bt_set_enable(int is_on);
@@ -93,7 +100,8 @@ enum hi_GPIO_DIR_E {
 };
 #endif
 
-#if defined(CONFIG_AW_BOARD) || defined(CONFIG_RK_BOARD)
+#if defined(CONFIG_AW_BOARD) || defined(CONFIG_RK_BOARD) || \
+    defined(CONFIG_MAINLINE_BOARD)
 #include <linux/pm_wakeirq.h>
 #endif
 
@@ -1411,7 +1419,8 @@ OUT:
 	return ret;
 }
 
-#if defined(CONFIG_AW_BOARD) || defined(CONFIG_RK_BOARD)
+#if defined(CONFIG_AW_BOARD) || defined(CONFIG_RK_BOARD) || \
+    defined(CONFIG_MAINLINE_BOARD)
 static void marlin_bt_wake_int_en(void)
 {
 	enable_irq(marlin_dev->bt_wake_host_int_num);
@@ -1435,8 +1444,13 @@ static int marlin_registsr_bt_wake(struct device *dev, int bt_wake_host_gpio)
 {
 	int ret = 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+	ret = devm_gpio_request_one(dev, bt_wake_host_gpio, 0,
+				    "bt-wake-host-gpio");
+#else
 	ret = devm_gpio_request(dev, bt_wake_host_gpio,
 				"bt-wake-host-gpio");
+#endif
 	if (ret) {
 		WCN_ERR("bt-wake-host-gpio request err: %d\n",
 			bt_wake_host_gpio);
@@ -1715,7 +1729,7 @@ static int marlin_parse_dt(struct platform_device *pdev)
 				bt_wake_host_gpio);
 			return -EINVAL;
 		}
-#ifdef CONFIG_RK_BOARD
+#if defined(CONFIG_RK_BOARD) || defined(CONFIG_MAINLINE_BOARD)
 		ret = marlin_registsr_bt_wake(&pdev->dev, bt_wake_host_gpio);
 		if(ret) {
 			WCN_ERR("Register wake up Host Err %d\n", ret);
@@ -2011,7 +2025,8 @@ static void marlin_send_sdio_config_to_cp_vendor(void)
 
 #if (defined(CONFIG_HISI_BOARD) || defined(CONFIG_AML_BOARD) ||\
 	defined(CONFIG_RK_BOARD) || defined(CONFIG_AW_BOARD) ||\
-	defined(CONFIG_MTK_BOARD) || defined(CONFIG_GOKE_BOARD))
+	defined(CONFIG_MTK_BOARD) || defined(CONFIG_GOKE_BOARD) ||\
+	defined(CONFIG_MAINLINE_BOARD))
 	/* Vendor config */
 
 	/* bit[0]: sdio_config_en:
@@ -4127,7 +4142,7 @@ static int  marlin_remove(struct platform_device *pdev)
 #endif
 {
 #if (defined(CONFIG_BT_WAKE_HOST_EN) && defined(CONFIG_AW_BOARD)) \
-	|| defined(CONFIG_RK_BOARD)
+	|| defined(CONFIG_RK_BOARD) || defined(CONFIG_MAINLINE_BOARD)
 	marlin_unregistsr_bt_wake();
 #endif
 	cancel_work_sync(&marlin_dev->download_wq);
@@ -4228,7 +4243,7 @@ static int marlin_suspend(struct device *dev)
 
 	WCN_INFO("[%s]enter\n", __func__);
 #if ((defined(CONFIG_BT_WAKE_HOST_EN) && defined(CONFIG_AW_BOARD)) \
-	|| defined(CONFIG_RK_BOARD))
+	|| defined(CONFIG_RK_BOARD) || defined(CONFIG_MAINLINE_BOARD))
 	/* enable wcn wake host irq. */
 	marlin_bt_wake_int_en();
 #endif
@@ -4294,7 +4309,7 @@ static int marlin_resume(struct device *dev)
 {
 	WCN_INFO("[%s]enter\n", __func__);
 #if ((defined(CONFIG_BT_WAKE_HOST_EN) && defined(CONFIG_AW_BOARD)) \
-	|| defined(CONFIG_RK_BOARD))
+	|| defined(CONFIG_RK_BOARD) || defined(CONFIG_MAINLINE_BOARD))
 	/* disable wcn wake host irq. */
 	marlin_bt_wake_int_dis();
 #endif
@@ -4360,6 +4375,10 @@ extern void __exit gnss_pmnotify_ctl_cleanup(void);
 extern int __init gnss_module_init(void);
 extern void __exit gnss_module_exit(void);
 #endif
+#if defined(CONFIG_AML_BOARD) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+extern int wifi_dt_init(void);
+extern void wifi_dt_exit(void);
+#endif
 static int __init marlin_init(void)
 {
 	WCN_INFO("marlin_init entry!\n");
@@ -4372,6 +4391,9 @@ static int __init marlin_init(void)
 	gnss_common_ctl_init();
 	gnss_pmnotify_ctl_init();
 	gnss_module_init();
+#endif
+#if defined(CONFIG_AML_BOARD) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+	wifi_dt_init();
 #endif
 	return platform_driver_register(&marlin_driver);
 }
@@ -4394,6 +4416,9 @@ static void __exit marlin_exit(void)
 	gnss_module_exit();
 	platform_device_register(&gnss_common_ctl_device);
 #endif
+#if defined(CONFIG_AML_BOARD) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+	wifi_dt_exit();
+#endif
 	platform_driver_unregister(&marlin_driver);
 
 	WCN_INFO("marlin_exit end!\n");
@@ -4403,6 +4428,8 @@ module_exit(marlin_exit);
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("Spreadtrum  WCN Marlin Driver");
 MODULE_AUTHOR("Yufeng Yang <yufeng.yang@spreadtrum.com>");
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
 #endif

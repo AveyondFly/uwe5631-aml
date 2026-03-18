@@ -146,7 +146,7 @@ BSP_CHIP_ID := uwe5621
 WCN_HW_TYPE := sdio
 endif
 
-MODULE_NAME := $(BSP_CHIP_ID)_bsp_$(WCN_HW_TYPE)
+MODULE_NAME = $(BSP_CHIP_ID)_bsp_$(WCN_HW_TYPE)
 
 ifneq ($(UNISOC_FW_PATH_CONFIG),)
 ccflags-y += -DCONFIG_CUSTOMIZE_UNISOC_FW_PATH=\"$(UNISOC_FW_PATH_CONFIG)\"
@@ -488,6 +488,25 @@ all_dependencies += install
 endif
 ### ---------- Rockchip end ---------- ###
 
+### ---------- Mainline kernel start ---------- ###
+ifeq ($(CONFIG_MAINLINE_WIFI_DEVICE_UWE5621),y)
+export CONFIG_WCN_SDIO = y
+export CONFIG_WCN_SWD = y
+ccflags-y += -DCONFIG_CHECK_DRIVER_BY_CHIPID
+BSP_CHIP_ID := uwe5621
+WCN_HW_TYPE := sdio
+ccflags-y += -DCONFIG_MAINLINE_BOARD
+ccflags-y += -DCONFIG_WCN_PARSE_DTS
+ccflags-y += -DCONFIG_WCN_SDIO
+ccflags-y += -DCONFIG_WCN_SLP
+ccflags-y += -DCONFIG_WCN_SWD
+ccflags-y += -DCONFIG_SDIO_BLKSIZE_512
+ccflags-y += -DCONFIG_BT_WAKE_HOST_EN
+# Use esmd3 (WL_WAKEUP_HOST) IRQ mode like CoreELEC
+ccflags-y += -DCONFIG_CUSTOMIZE_SDIO_IRQ_TYPE=3
+endif
+### ---------- Mainline kernel end ---------- ###
+
 ### ---------- Allwinner start ---------- ###
 ifeq ($(CONFIG_AW_WIFI_DEVICE_UWE5622),y)
 #### add cflag ######
@@ -622,7 +641,8 @@ $(MODULE_NAME)-$(CONFIG_WCN_SDIO) += \
 		    sleep/slp_mgr.o \
 		    sleep/slp_sdio.o \
 		    sleep/slp_test.o \
-		    platform/mem_pd_mgr.o
+		    platform/mem_pd_mgr.o \
+		    platform/wifi_dt.o
 
 $(MODULE_NAME)-$(CONFIG_WCN_GNSS) += \
 		    platform/gnss/gnss_common_ctl.o \
