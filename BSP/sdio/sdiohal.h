@@ -106,7 +106,12 @@ extern long int sdiohal_log_level;
 /* cp blk size */
 #define SDIOHAL_BLK_SIZE 512
 /* each pac data max size,cp align size */
+/* Amlogic G12 has dram-access-quirk limiting SRAM to 1536 bytes (3 blocks) */
+#ifdef CONFIG_AML_BOARD
+#define MAX_PAC_SIZE (SDIOHAL_BLK_SIZE * 3)
+#else
 #define MAX_PAC_SIZE (SDIOHAL_BLK_SIZE * 4)
+#endif
 #elif defined(CONFIG_WCN_PARSE_DTS)
 /* cp blk size */
 #define SDIOHAL_BLK_SIZE (sprdwcn_bus_get_blk_size())

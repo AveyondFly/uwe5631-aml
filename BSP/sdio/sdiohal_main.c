@@ -1348,18 +1348,27 @@ static int sdiohal_enable_slave_irq(void)
 
 	/* set func1 dedicated0,1 int to ap enable */
 
+	sdiohal_info("%s entry, irq_type=%d\n", __func__, p_data->irq_type);
+
 	if (p_data->irq_type != SDIOHAL_RX_EXTERNAL_IRQ)
 		return 0;
+
+	if (!p_data->sdio_func[FUNC_0]) {
+		sdiohal_err("%s: sdio_func[0] is NULL\n", __func__);
+		return -ENODEV;
+	}
 
 	sdiohal_resume_check();
 	sdiohal_op_enter();
 	sdio_claim_host(p_data->sdio_func[FUNC_0]);
 	reg_val = sdio_readb(p_data->sdio_func[FUNC_0],
 			     SDIOHAL_FBR_DEINT_EN, &err);
+	sdiohal_info("%s: DEINT_EN read=0x%x, err=%d\n", __func__, reg_val, err);
 	sdio_writeb(p_data->sdio_func[FUNC_0],
 		    reg_val | VAL_DEINT_ENABLE, SDIOHAL_FBR_DEINT_EN, &err);
 	reg_val = sdio_readb(p_data->sdio_func[FUNC_0],
 			     SDIOHAL_FBR_DEINT_EN, &err);
+	sdiohal_info("%s: DEINT_EN after=0x%x, err=%d\n", __func__, reg_val, err);
 	sdio_release_host(p_data->sdio_func[FUNC_0]);
 	sdiohal_op_leave();
 
@@ -1388,8 +1397,12 @@ static int sdiohal_host_irq_init(unsigned int irq_gpio_num)
 	{
 		struct device_node *np = of_find_compatible_node(NULL, NULL,
 							"unisoc,uwe_bsp");
+		int gpio_num;
+
 		if (np) {
 			p_data->irq_num = irq_of_parse_and_map(np, 0);
+			/* Get GPIO number from sdio-ext-int-gpio property */
+			gpio_num = of_get_named_gpio(np, "sdio-ext-int-gpio", 0);
 			of_node_put(np);
 		}
 		if (p_data->irq_num <= 0) {
@@ -1397,6 +1410,24 @@ static int sdiohal_host_irq_init(unsigned int irq_gpio_num)
 				    p_data->irq_num);
 			p_data->irq_num = 0;
 			return -EINVAL;
+		}
+		/* Configure GPIO as input for interrupt */
+		if (gpio_is_valid(gpio_num)) {
+			ret = gpio_request(gpio_num, "sdiohal_gpio");
+			if (ret < 0 && ret != -EBUSY) {
+				sdiohal_err("gpio_request %d failed: %d\n",
+					    gpio_num, ret);
+			} else {
+				ret = gpio_direction_input(gpio_num);
+				if (ret < 0) {
+					sdiohal_err("gpio_direction_input %d failed: %d\n",
+						    gpio_num, ret);
+				} else {
+					p_data->gpio_num = gpio_num;
+					sdiohal_info("gpio %d configured as input for IRQ %d\n",
+						     gpio_num, p_data->irq_num);
+				}
+			}
 		}
 		p_data->irq_trigger_type = IRQF_TRIGGER_LOW;
 		sdiohal_info("mainline gpio irq num:%d trigger:low\n",
@@ -1988,8 +2019,10 @@ int sdiohal_runtime_get(void)
 			}
 			sdio_release_host(p_data->sdio_func[FUNC_1]);
 		} else if ((p_data->irq_type == SDIOHAL_RX_EXTERNAL_IRQ) &&
-			(p_data->irq_num > 0))
+			(p_data->irq_num > 0)) {
+			sdiohal_enable_slave_irq();
 			enable_irq(p_data->irq_num);
+		}
 
 		return 0;
 	}

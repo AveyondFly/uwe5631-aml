@@ -170,7 +170,7 @@ static int sdiohal_rx_buf_parser(char *data_buf, int valid_len)
 				sdiohal_err("%s skip type[%d]sub[%d]len[%d]\n",
 					    __func__, puh->type, puh->subtype,
 					    puh->len);
-				continue;
+				break;
 			}
 
 			kt = ktime_get();
@@ -365,6 +365,13 @@ read_again:
 				*((unsigned int *)(rx_buf + (read_len - 8)));
 			sdiohal_debug("%s rx_dtbs:%d,valid len:%d\n",
 				      __func__, rx_dtbs, valid_len);
+			/* Validate valid_len to prevent buffer overrun */
+			if (valid_len > (read_len - 8) || valid_len == 0) {
+				sdiohal_err("%s invalid valid_len=%u, read_len=%d, skip parsing\n",
+					    __func__, valid_len, read_len);
+				rx_dtbs = 0;
+				goto submit_list;
+			}
 			sdiohal_rx_buf_parser(rx_buf, valid_len);
 		}
 

@@ -1779,15 +1779,12 @@ static int marlin_parse_dt(struct platform_device *pdev)
 			of_get_named_gpio(np, "wl-wake-host-gpio", 0);
 		WCN_INFO("%s wl-wake-host-gpio=%d\n", __func__,
 			 wl_wake_host_gpio);
-		if (!gpio_is_valid(wl_wake_host_gpio)) {
-			WCN_ERR("int irq is invalid: %d\n",
-				wl_wake_host_gpio);
-			return -EINVAL;
+		/* GPIO is optional - may already be managed by wifi_dt */
+		if (gpio_is_valid(wl_wake_host_gpio)) {
+			ret = gpio_request(wl_wake_host_gpio, "wl-wake-host-gpio");
+			if (ret)
+				WCN_INFO("wl-wake-host-gpio request skipped (may be in use)\n");
 		}
-		ret = gpio_request(wl_wake_host_gpio, "wl-wake-host-gpio");
-		if (ret)
-			WCN_ERR("wl-wake-host-gpio request err: %d\n",
-				wl_wake_host_gpio);
 	}
 #else
 #ifdef CONFIG_WL_WAKE_HOST_EN

@@ -204,19 +204,25 @@ static int wifi_dt_probe(struct platform_device *pdev)
 					    GPIOF_IN, "wifi_irq");
 		if (ret) {
 			wifi_info.interrupt_pin = -1;
-		} else {
-			wifi_info.irq_num = gpio_to_irq(wifi_info.interrupt_pin);
-			WIFI_INFO("interrupt_pin: %d, irq_num: %d\n",
-				  wifi_info.interrupt_pin, wifi_info.irq_num);
 		}
 	}
 
-	/* Get IRQ trigger type */
+	/* Get IRQ from interrupts property (preferred) or gpio_to_irq fallback */
+	wifi_info.irq_num = platform_get_irq(pdev, 0);
+	if (wifi_info.irq_num < 0 && gpio_is_valid(wifi_info.interrupt_pin)) {
+		wifi_info.irq_num = gpio_to_irq(wifi_info.interrupt_pin);
+	}
+	WIFI_INFO("interrupt_pin: %d, irq_num: %d\n",
+		  wifi_info.interrupt_pin, wifi_info.irq_num);
+
+	/* Get IRQ trigger type - support both IRQF_* and GPIO_IRQ_* formats */
 	ret = of_property_read_string(np, "irq_trigger_type", &trigger_type_str);
 	if (!ret) {
-		if (strcmp(trigger_type_str, "IRQF_TRIGGER_HIGH") == 0)
+		if (strcmp(trigger_type_str, "IRQF_TRIGGER_HIGH") == 0 ||
+		    strcmp(trigger_type_str, "GPIO_IRQ_HIGH") == 0)
 			wifi_info.irq_trigger_type = IRQF_TRIGGER_HIGH;
-		else if (strcmp(trigger_type_str, "IRQF_TRIGGER_LOW") == 0)
+		else if (strcmp(trigger_type_str, "IRQF_TRIGGER_LOW") == 0 ||
+			 strcmp(trigger_type_str, "GPIO_IRQ_LOW") == 0)
 			wifi_info.irq_trigger_type = IRQF_TRIGGER_LOW;
 		else if (strcmp(trigger_type_str, "IRQF_TRIGGER_RISING") == 0)
 			wifi_info.irq_trigger_type = IRQF_TRIGGER_RISING;
@@ -224,6 +230,8 @@ static int wifi_dt_probe(struct platform_device *pdev)
 			wifi_info.irq_trigger_type = IRQF_TRIGGER_FALLING;
 		else
 			wifi_info.irq_trigger_type = IRQF_TRIGGER_HIGH;
+		WIFI_INFO("irq_trigger_type: %s -> 0x%x\n",
+			  trigger_type_str, wifi_info.irq_trigger_type);
 	} else {
 		wifi_info.irq_trigger_type = IRQF_TRIGGER_HIGH;
 	}

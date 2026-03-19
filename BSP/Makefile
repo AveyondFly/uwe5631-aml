@@ -361,14 +361,14 @@ endif
 ifeq ($(CFG_AML_WIFI_DEVICE_UWE5621),y)
 #### add cflag ######
 ccflags-y += -DCONFIG_AML_BOARD
-#ccflags-y += -DCONFIG_WCN_PARSE_DTS
+ccflags-y += -DCONFIG_WCN_PARSE_DTS
 #ccflags-y += -DCONFIG_WCN_CHIPEN
 #ccflags-y += -DCONFIG_WCN_RESET
 ccflags-y += -DCONFIG_WCN_RESET_PIN_CONNECTED
 ccflags-y += -DCONFIG_WCN_POWER_UP_DOWN
 #ccflags-y += -DCONFIG_WCN_DOWNLOAD_FIRMWARE_FROM_HEX
 ccflags-y += -DCONFIG_BT_WAKE_HOST_EN
-#ccflags-y += -DCONFIG_WL_WAKE_HOST_EN
+ccflags-y += -DCONFIG_WL_WAKE_HOST_EN
 #ccflags-y += -DCONFIG_WCN_RESUME_POWER_DOWN
 #ccflags-y += -DCONFIG_WCN_RESUME_KEEPPWR_RESETSDIO
 #ccflags-y += -DCONFIG_WCN_CHECK_MODULE_VENDOR
